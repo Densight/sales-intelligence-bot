@@ -202,8 +202,11 @@ SIGNALS:
 def enrich_with_claude_mcp(companies: list) -> str:
     """
     Claude Call 2 — with Vibe Prospecting MCP enabled.
-    Claude autonomously calls Vibe Prospecting to enrich each company,
+    Claude autonomously calls Vibe Prospecting for each company,
     then returns a fully formatted markdown brief.
+
+    Uses a multi-turn loop because Claude may need several tool calls
+    to enrich all 5 companies — each tool call is a separate turn.
     """
     print("\n🤖 Claude Call 2 — enriching via Vibe Prospecting MCP...")
 
@@ -231,7 +234,7 @@ Your task:
 **Website:** | **LinkedIn:** | **Industry:** | **Size:** | **Revenue:**
 
 **Signal:** [what triggered this]
-**Why now:** [timing rationale]  
+**Why now:** [timing rationale]
 **Outreach angle:** [what we pitch]
 **Suggested first line:** [opening sentence]
 **Confidence:** High/Medium/Low
@@ -245,41 +248,67 @@ Your task:
 If enrichment data is unavailable for a company, note it and move on.
 Always complete all 5 companies."""
 
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 8000,
-            "messages": [{"role": "user", "content": prompt}],
-            "mcp_servers": [
-                {
-                    "type": "url",
-                    "url": VIBE_MCP_URL,
-                    "name": "vibe-prospecting",
-                }
-            ],
-        },
-        timeout=180,  # MCP calls take longer
-    )
-
-    result = resp.json()
-
-    # Extract all text blocks from the response
-    # (MCP responses contain tool_use and tool_result blocks alongside text)
+    messages = [{"role": "user", "content": prompt}]
     full_text = ""
-    for block in result.get("content", []):
-        if block.get("type") == "text":
-            full_text += block.get("text", "")
+    total_tool_calls = 0
+    max_turns = 20  # safety limit
+
+    for turn in range(max_turns):
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+                "anthropic-beta":    "mcp-client-2025-04-04",
+            },
+            json={
+                "model":       "claude-sonnet-4-20250514",
+                "max_tokens":  8000,
+                "messages":    messages,
+                "mcp_servers": [
+                    {
+                        "type": "url",
+                        "url":  VIBE_MCP_URL,
+                        "name": "vibe-prospecting",
+                    }
+                ],
+            },
+            timeout=180,
+        )
+
+        if resp.status_code != 200:
+            print(f"   ⚠️  API error on turn {turn+1}: {resp.status_code} — {resp.text[:300]}")
+            break
+
+        result      = resp.json()
+        stop_reason = result.get("stop_reason", "")
+        content     = result.get("content", [])
+
+        # Collect text from this turn
+        for block in content:
+            if block.get("type") == "text":
+                full_text += block.get("text", "")
+            elif block.get("type") == "tool_use":
+                total_tool_calls += 1
+                print(f"   → Turn {turn+1}: Claude called '{block.get('name', 'unknown')}'")
+
+        # If Claude is done, break
+        if stop_reason == "end_turn":
+            print(f"   → Finished after {turn+1} turn(s), {total_tool_calls} tool calls")
+            break
+
+        # If Claude wants to use more tools, append its response and continue
+        if stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": content})
+            # Tool results are handled server-side by MCP — just continue
+            messages.append({"role": "user", "content": "Continue."})
+        else:
+            print(f"   → Stopped with reason: {stop_reason}")
+            break
 
     print("   → Enrichment complete ✅")
     return full_text
-
-
 # ── STEP 4a: CREATE GITHUB ISSUE ─────────────────────────────────────────────
 
 def create_github_issue(companies: list, signal_count: int) -> str:
