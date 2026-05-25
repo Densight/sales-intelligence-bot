@@ -143,6 +143,14 @@ def identify_companies(signals: dict) -> list:
     """
     print("\n🤖 Claude Call 1 — identifying companies from signals...")
 
+    # Trim signals to keep costs low — titles only, no full descriptions
+    trimmed = {
+        "hackernews": [{"title": s.get("title",""), "url": s.get("url","")} for s in signals.get("hackernews", [])],
+        "rss":        [{"title": s.get("title",""), "source": s.get("source","")} for s in signals.get("rss", [])],
+        "github":     [{"company": s.get("company",""), "repo": s.get("repo",""), "description": s.get("description","")[:80], "stars": s.get("stars",0)} for s in signals.get("github", [])],
+    }
+
+
     prompt = f"""You are a senior sales intelligence analyst for {YOUR_COMPANY}.
 
 Our service: {YOUR_SERVICE}
@@ -183,7 +191,7 @@ Only US companies. Only genuine opportunities. Be ruthlessly selective.
 Make pain_points and talking_points specific to THIS company — not generic.
 
 SIGNALS:
-{json.dumps(signals, indent=2)}"""
+{json.dumps(trimmed, indent=2)}"""
 
     resp = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -193,7 +201,7 @@ SIGNALS:
             "content-type": "application/json",
         },
         json={
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-haiku-4-5-20251001",
             "max_tokens": 2000,
             "messages": [{"role": "user", "content": prompt}],
         },
