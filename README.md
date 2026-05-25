@@ -97,4 +97,3 @@ This is the pattern. Everything else is just configuration.
 ---
 
 Built by [Densight Labs](https://densightlabs.com) — Applied AI. Not just talked about.
-# sales-intelligence-bot
