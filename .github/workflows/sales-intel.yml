@@ -1,11 +1,11 @@
 name: Sales Intelligence Brief
 
 on:
-  # Runs every Monday at 8:00 AM PKT (3:00 AM UTC)
+  # Every Monday 8:00 AM PKT (3:00 AM UTC)
   schedule:
     - cron: "0 3 * * 1"
 
-  # Run manually from GitHub UI anytime
+  # Run manually from GitHub UI — useful for demo and testing
   workflow_dispatch:
     inputs:
       target_market:
@@ -30,14 +30,16 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install -r requirements.txt
 
       - name: Run Sales Intelligence Bot
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPO:       ${{ github.repository }}
-          YOUR_COMPANY:      "Densight Labs"
-          YOUR_SERVICE:      "AI implementation and workflow automation for enterprise teams"
-          TARGET_MARKET:     ${{ inputs.target_market || 'mid-market companies in Pakistan and GCC expanding their tech or operations teams' }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO:        ${{ github.repository }}
+          GOOGLE_DOC_ID:      ${{ secrets.GOOGLE_DOC_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          YOUR_COMPANY:       "Densight Labs"
+          YOUR_SERVICE:       "AI implementation and workflow automation for enterprise teams"
+          TARGET_MARKET:      ${{ inputs.target_market || 'US-based mid-market companies scaling their operations or tech teams' }}
         run: python scripts/generate_brief.py
