@@ -43,7 +43,8 @@ YOUR_COMPANY  = os.environ.get("YOUR_COMPANY",  "Densight Labs")
 YOUR_SERVICE  = os.environ.get("YOUR_SERVICE",  "AI implementation and workflow automation for enterprise teams")
 TARGET_MARKET = os.environ.get("TARGET_MARKET", "US-based mid-market companies scaling their operations or tech teams")
 
-VIBE_MCP_URL  = "https://vibeprospecting.explorium.ai/mcp"
+VIBE_MCP_URL   = "https://vibeprospecting.explorium.ai/mcp"
+VIBE_MCP_TOKEN = os.environ["VIBE_PROSPECTING_TOKEN"]
 
 # ── STEP 1: FETCH SIGNALS ─────────────────────────────────────────────────────
 
@@ -268,9 +269,10 @@ Always complete all 5 companies."""
                 "messages":    messages,
                 "mcp_servers": [
                     {
-                        "type": "url",
-                        "url":  VIBE_MCP_URL,
-                        "name": "vibe-prospecting",
+                        "type":                "url",
+                        "url":                 VIBE_MCP_URL,
+                        "name":                "vibe-prospecting",
+                        "authorization_token": VIBE_MCP_TOKEN,
                     }
                 ],
             },
