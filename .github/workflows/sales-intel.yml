@@ -39,7 +39,7 @@ jobs:
           GITHUB_REPO:            ${{ github.repository }}
           GOOGLE_DOC_ID:          ${{ secrets.GOOGLE_DOC_ID }}
           GOOGLE_CREDENTIALS:     ${{ secrets.GOOGLE_CREDENTIALS }}
-          VIBE_PROSPECTING_TOKEN: ${{ secrets.VIBE_PROSPECTING_TOKEN }}
+          HUNTER_API_KEY:          ${{ secrets.HUNTER_API_KEY }}
           YOUR_COMPANY:       "Densight Labs"
           YOUR_SERVICE:       "AI implementation and workflow automation for enterprise teams"
           TARGET_MARKET:      ${{ inputs.target_market || 'US-based mid-market companies scaling their operations or tech teams' }}
