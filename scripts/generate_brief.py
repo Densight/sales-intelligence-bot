@@ -147,7 +147,7 @@ def identify_companies(signals: dict) -> list:
     trimmed = {
         "hackernews": [{"title": s.get("title",""), "url": s.get("url","")} for s in signals.get("hackernews", [])],
         "rss":        [{"title": s.get("title",""), "source": s.get("source","")} for s in signals.get("rss", [])],
-        "github":     [{"company": s.get("company",""), "repo": s.get("repo",""), "description": s.get("description","")[:80], "stars": s.get("stars",0)} for s in signals.get("github", [])],
+        "github":     [{"company": s.get("company",""), "repo": s.get("repo",""), "description": (s.get("description") or "")[:80], "stars": s.get("stars",0)} for s in signals.get("github", [])],
     }
 
 
