@@ -148,23 +148,39 @@ def identify_companies(signals: dict) -> list:
 Our service: {YOUR_SERVICE}
 Target: {TARGET_MARKET}
 
-Analyse the signals below and identify exactly 5 US-based companies that are 
-strong outreach opportunities RIGHT NOW.
+Analyse the signals below and identify exactly 3 US-based companies that are
+the strongest outreach opportunities RIGHT NOW. Quality over quantity — pick the 3 best.
 
 Return ONLY a JSON array. No preamble, no markdown. Example format:
 [
   {{
     "company_name": "Acme Corp",
     "domain": "acme.com",
-    "signal": "Raised $20M Series A, hiring 50 engineers",
-    "why_now": "Scaling fast = automation pain incoming",
-    "outreach_angle": "Automate their engineering onboarding and reporting workflows",
+    "industry": "Fintech",
+    "estimated_size": "201-500 employees",
+    "signal": "Raised $20M Series A, hiring 50 engineers across ops and engineering",
+    "trigger_date": "This week",
+    "why_now": "Scaling from 50 to 100 people is exactly when manual processes collapse. They will feel this pain within 30 days.",
+    "pain_points": [
+      "Engineer onboarding taking 2-3 weeks manually",
+      "Status updates still happening over Slack and email",
+      "No automated reporting to leadership"
+    ],
+    "outreach_angle": "Automate their engineering onboarding, weekly status reporting, and internal approvals",
     "suggested_first_line": "Congrats on the Series A — onboarding 50 engineers manually is exactly when workflows start breaking.",
+    "follow_up_angle": "Offer a free 2-hour workflow audit — map their top 3 manual processes and show what automation looks like",
+    "talking_points": [
+      "Companies at this stage spend 8-12 hours/week on status updates alone",
+      "Automation ROI is fastest during hiring spikes — not after",
+      "We have done this for 3 companies at the same stage"
+    ],
+    "red_flags": "Decision maker may be too busy — target ops lead not CEO",
     "confidence": "High"
   }}
 ]
 
 Only US companies. Only genuine opportunities. Be ruthlessly selective.
+Make pain_points and talking_points specific to THIS company — not generic.
 
 SIGNALS:
 {json.dumps(signals, indent=2)}"""
@@ -321,15 +337,35 @@ def create_github_issue(companies: list, signal_count: int) -> str:
     today = date.today().strftime("%d %b %Y")
     title = f"🎯 Sales Intelligence Brief — {today}"
 
-    # Build clean summary without emails
+    # Build rich summary
     summary_lines = []
     for i, c in enumerate(companies, 1):
-        summary_lines.append(f"""### {i}. {c['company_name']}
-**Signal:** {c['signal']}
-**Why now:** {c['why_now']}
-**Angle:** {c['outreach_angle']}
-**First line:** _{c['suggested_first_line']}_
-**Confidence:** {c['confidence']}
+        pain  = chr(10).join(f"  - {p}" for p in c.get("pain_points", []))
+        talks = chr(10).join(f"  - {t}" for t in c.get("talking_points", []))
+        summary_lines.append(f"""### {i}. {c['company_name']} — {c.get('industry','')}&nbsp;&nbsp;`{c.get('confidence','')}`
+> **Signal ({c.get('trigger_date','this week')}):** {c['signal']}
+
+**Why contact them NOW:**
+{c.get('why_now', '')}
+
+**Their pain points:**
+{pain}
+
+**Your outreach angle:**
+{c['outreach_angle']}
+
+**Suggested first line:**
+> _{c['suggested_first_line']}_
+
+**Follow-up angle:**
+{c.get('follow_up_angle', '')}
+
+**Talking points for the call:**
+{talks}
+
+⚠️ **Watch out:** {c.get('red_flags', 'N/A')}
+
+---
 """)
 
     body = f"""## 🎯 Sales Intelligence Brief
