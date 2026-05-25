@@ -200,45 +200,35 @@ SIGNALS:
 
 # ── STEP 3: CLAUDE CALL 2 — ENRICH WITH VIBE PROSPECTING MCP ─────────────────
 
-def enrich_with_claude_mcp(companies: list) -> str:
+def enrich_one_company(company: dict) -> str:
     """
-    Claude Call 2 — with Vibe Prospecting MCP enabled.
-    Claude autonomously calls Vibe Prospecting for each company,
-    then returns a fully formatted markdown brief.
-
-    Uses a multi-turn loop because Claude may need several tool calls
-    to enrich all 5 companies — each tool call is a separate turn.
+    Enrich a single company via one Claude + Vibe Prospecting MCP call.
+    Splitting per-company keeps each call under 60s.
     """
-    print("\n🤖 Claude Call 2 — enriching via Vibe Prospecting MCP...")
-
-    company_list = "\n".join([
-        f"- {c['company_name']} (domain: {c['domain']}) | Signal: {c['signal']} | Angle: {c['outreach_angle']} | First line: {c['suggested_first_line']}"
-        for c in companies
-    ])
-
     prompt = f"""You are a sales intelligence assistant for {YOUR_COMPANY}.
 
-I have identified these 5 US companies as outreach targets:
+Enrich this ONE company using Vibe Prospecting tools:
 
-{company_list}
+Company: {company['company_name']}
+Domain:  {company['domain']}
+Signal:  {company['signal']}
+Angle:   {company['outreach_angle']}
+First line: {company['suggested_first_line']}
 
-Your task:
-1. For EACH company, use the Vibe Prospecting tools to look up:
-   - Company details: website, LinkedIn, industry, employee count, revenue range
-   - Decision makers: find the CEO, CTO, or VP of Operations/Sales
-   - For each decision maker: full name, job title, email, LinkedIn URL
-
-2. After enriching all 5 companies, produce a clean markdown sales brief with this structure for each:
+Steps:
+1. Call match-business with the company name and domain
+2. Call fetch-entities or match-prospects to find CEO, CTO, or VP Operations/Sales
+3. Return a markdown section in this exact format:
 
 ---
-## [Company Name]
+## {company['company_name']}
 **Website:** | **LinkedIn:** | **Industry:** | **Size:** | **Revenue:**
 
-**Signal:** [what triggered this]
-**Why now:** [timing rationale]
-**Outreach angle:** [what we pitch]
-**Suggested first line:** [opening sentence]
-**Confidence:** High/Medium/Low
+**Signal:** {company['signal']}
+**Why now:** {company['why_now']}
+**Outreach angle:** {company['outreach_angle']}
+**Suggested first line:** {company['suggested_first_line']}
+**Confidence:** {company['confidence']}
 
 ### Decision Makers
 | Name | Title | Email | LinkedIn |
@@ -246,71 +236,82 @@ Your task:
 | ... | ... | ... | ... |
 ---
 
-If enrichment data is unavailable for a company, note it and move on.
-Always complete all 5 companies."""
+Fill in all fields from the Vibe Prospecting data. If data is unavailable write N/A."""
 
     messages = [{"role": "user", "content": prompt}]
     full_text = ""
-    total_tool_calls = 0
-    max_turns = 20  # safety limit
+    max_turns = 10
 
     for turn in range(max_turns):
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key":         ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type":      "application/json",
-                "anthropic-beta":    "mcp-client-2025-04-04",
-            },
-            json={
-                "model":       "claude-sonnet-4-20250514",
-                "max_tokens":  8000,
-                "messages":    messages,
-                "mcp_servers": [
-                    {
-                        "type":                "url",
-                        "url":                 VIBE_MCP_URL,
-                        "name":                "vibe-prospecting",
-                        "authorization_token": VIBE_MCP_TOKEN,
-                    }
-                ],
-            },
-            timeout=180,
-        )
+        try:
+            resp = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key":         ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type":      "application/json",
+                    "anthropic-beta":    "mcp-client-2025-04-04",
+                },
+                json={
+                    "model":       "claude-sonnet-4-20250514",
+                    "max_tokens":  2000,
+                    "messages":    messages,
+                    "mcp_servers": [
+                        {
+                            "type":                "url",
+                            "url":                 VIBE_MCP_URL,
+                            "name":                "vibe-prospecting",
+                            "authorization_token": VIBE_MCP_TOKEN,
+                        }
+                    ],
+                },
+                timeout=120,  # 2 min per company
+            )
+        except requests.exceptions.Timeout:
+            print(f"      ⚠️  Timeout on turn {turn+1} — moving on")
+            break
 
         if resp.status_code != 200:
-            print(f"   ⚠️  API error on turn {turn+1}: {resp.status_code} — {resp.text[:300]}")
+            print(f"      ⚠️  API error: {resp.status_code} — {resp.text[:200]}")
             break
 
         result      = resp.json()
         stop_reason = result.get("stop_reason", "")
         content     = result.get("content", [])
 
-        # Collect text from this turn
         for block in content:
             if block.get("type") == "text":
                 full_text += block.get("text", "")
             elif block.get("type") == "tool_use":
-                total_tool_calls += 1
-                print(f"   → Turn {turn+1}: Claude called '{block.get('name', 'unknown')}'")
+                print(f"      → Called: {block.get('name', 'unknown')}")
 
-        # If Claude is done, break
         if stop_reason == "end_turn":
-            print(f"   → Finished after {turn+1} turn(s), {total_tool_calls} tool calls")
             break
-
-        # If Claude wants to use more tools, append its response and continue
         if stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": content})
-            # Tool results are handled server-side by MCP — just continue
             messages.append({"role": "user", "content": "Continue."})
         else:
-            print(f"   → Stopped with reason: {stop_reason}")
             break
 
-    print("   → Enrichment complete ✅")
-    return full_text
+    return full_text or f"\n---\n## {company['company_name']}\n*Enrichment unavailable*\n---\n"
+
+
+def enrich_with_claude_mcp(companies: list) -> str:
+    """Enrich all companies one at a time — avoids timeout."""
+    print("\n🤖 Claude Call 2 — enriching companies via Vibe Prospecting MCP...")
+    all_sections = []
+
+    for i, company in enumerate(companies, 1):
+        print(f"   [{i}/5] Enriching {company['company_name']}...")
+        section = enrich_one_company(company)
+        all_sections.append(section)
+        print(f"   ✅ {company['company_name']} done")
+
+    print("   → All companies enriched")
+    return "\n".join(all_sections)
+
+
+
 # ── STEP 4a: CREATE GITHUB ISSUE ─────────────────────────────────────────────
 
 def create_github_issue(companies: list, signal_count: int) -> str:
